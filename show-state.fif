@@ -1,0 +1,57 @@
+#!/usr/bin/env fift -s
+"common-utils.fif" include
+
+// parse-data()
+// (cell -- seqno owner_pubkey price settlement reserve policies)
+//
+// Decodes data stored in the contract's persistent storage.
+{
+  <s
+    32 u@+
+    32 B@+
+    Gram@+
+    Gram@+
+    Gram@+
+    dict@+
+  s>
+} : parse-data()
+
+{
+  ."<data-boc>" cr
+  ."Displays data stored within the persisting storage of an flysure contract."
+} : usage()
+
+// == Parsing command-line arguments
+
+{
+  1 { =: BaseFile } nth-argument()
+  no-more-arguments()
+} scan-args()
+1 < { show-usage() } if // Checks that there's enough arguments
+
+// == End of parsing command-line arguments
+
+."Loading state from " BaseFile +".boc" type cr cr
+
+BaseFile +".boc" file>B B>boc =: ContractData
+."Raw data: " cr ContractData <s csr. cr
+
+ContractData parse-data()
+=: Policies =: Reserve =: Settlement =: Price =: OwnerPubkey =: SeqNo
+
+."Data:" cr
+."  seqno:             " SeqNo . cr
+."  owner_pubkey:      " OwnerPubkey Bx. cr
+."  price: " Price .GR cr
+."  settlement: " Settlement .GR cr
+."  reserve:  " Reserve .GR cr
+
+."  policies:" cr
+Policies 256 {
+  ."    #" over ._ .":" cr
+  8 i@+ -rot swap ."    └  policy holder addr: " .addr cr
+  32 u@+ swap ."    │  flyght date:     " . cr
+  32 u@+ swap ."    │  flyght code:     " . cr
+  -1
+} dictforeach
+drop

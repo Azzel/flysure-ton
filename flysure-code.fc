@@ -1,0 +1,158 @@
+;; insurer contract for flight delay cover
+;; accepts payment for 1 policy for everyone
+;; accepts actual airplane status from owner to save as database
+;; transfer gram on request in case flight was delayed according to database
+
+
+() send_money(int wc, int addr, int amount) impure {
+  send_raw_message(begin_cell()
+    .store_uint(0xc4, 9)
+    .store_int(wc, 8)
+    .store_uint(addr, 256)
+    .store_grams(amount)
+    .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+    .store_uint(0, 32) ;; Simple money transfer
+  .end_cell(), 3);
+}
+
+() send_message_back(slice addr, ans_tag, grams, mode) impure {
+  ;; int_msg_info$0 ihr_disabled:Bool bounce:Bool bounced:Bool src:MsgAddress -> 011000
+  var msg = begin_cell()
+    .store_uint(0x18, 6)
+    .store_slice(addr)
+    .store_grams(grams)
+    .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+    .store_uint(ans_tag, 32);
+
+  send_raw_message(msg.end_cell(), mode);
+}
+
+() save_data(seq_no, insurer_public_key, price, settlement, reserve, policies) impure {
+  set_data(begin_cell()
+      .store_uint(seq_no, 32)
+      .store_uint(insurer_public_key, 256)
+      .store_grams(price)
+      .store_grams(settlement)
+      .store_grams(reserve)
+      ;; Policies dictionary format:
+      ;;    holder addr as id
+      ;;    holder addr wc
+      ;;    fly date	
+      ;;    fly code	
+      .store_dict(policies)
+      .end_cell());
+}
+
+(int, int, int, int, int, cell) load_data() {
+    slice data_slice = get_data().begin_parse();
+    int seq_num = data_slice~load_uint(32);
+    int insurer_public_key = data_slice~load_uint(256);
+    int price = data_slice~load_grams();
+    int settlement = data_slice~load_grams();
+    int reserve = data_slice~load_grams();
+    cell policies = data_slice~load_dict();
+
+    return (seq_num, insurer_public_key, price, settlement, reserve, policies);
+}
+
+
+() recv_internal(int msg_value, cell in_msg_cell, slice in_msg) impure {
+  var cs = in_msg_cell.begin_parse();
+  var flags = cs~load_uint(4);  ;; int_msg_info$0 ihr_disabled:Bool bounce:Bool bounced:Bool
+  if (flags & 1) { ;; ignore bounced
+    return ();
+  }
+  if (in_msg.slice_empty?()) {
+    return ();
+  }
+
+  slice src_addr_slice = cs~load_msg_addr();
+  var (src_wc, src_addr) = parse_std_addr(src_addr_slice);
+
+  var (stored_seqno, insurer_public_key, price, settlement, reserve, policies) = load_data();
+
+  ifnot (msg_value == price) { ;; => attached value is not equal to the insurance price
+    return send_message_back(src_addr_slice, 0xfffffffe, 0, 64);
+  }
+
+  ;; todo check nor addr already in policies 
+
+  ;;in_msg struct:
+  ;;  holder wc
+  ;;  flight date
+  ;;  flight code
+
+  int flight_date = in_msg~load_uint(32);
+  if (flight_date <= now()) { ;;not accept old flights
+     ;;return (); ;;temporally mute
+  }
+  int flight_code = in_msg~load_uint(32); ;;todo remake as ref
+  
+  ;; Create new policy
+  var policy = begin_cell()
+            .store_int(src_wc, 8)
+            ;; .store_uint(src_addr, 256)
+            .store_uint(flight_date, 32)
+            .store_uint(flight_code, 32)
+            ; 
+ 
+  policies~udict_set_builder(256, src_addr, policy);
+  reserve = reserve + msg_value;
+
+  save_data(stored_seqno, insurer_public_key, price, settlement, reserve, policies);
+
+}
+
+() recv_external(slice in_msg) impure {
+  var signature = in_msg~load_bits(512);
+  var cs = in_msg;
+  var (msg_seqno, op) = (cs~load_uint(32), cs~load_uint(32));
+
+  ;;load current state
+  var (stored_seqno, insurer_public_key, price, settlement, reserve, policies) = load_data();
+  throw_unless(33, msg_seqno == stored_seqno);
+  stored_seqno = stored_seqno + 1;
+
+  ;;only insurer can send external message (?)
+  throw_unless(35, check_signature(slice_hash(in_msg), signature, insurer_public_key));
+
+  accept_message();
+
+  if (op == 1) {
+    ;; Update flight's statuses
+    ;;load dictionary with flight's statuses from message
+    var fl_status_dict = cs~load_dict();
+
+    var holder_addr = -1;
+    int f = 0;
+    do {
+      (holder_addr, var policy, f) = policies.udict_get_next?(256, holder_addr);
+      if (f) {
+        var (holder_wc, policy_fl_date, policy_fl_code) = (
+          policy~load_uint(8),
+	  policy~load_uint(32),
+          policy~load_uint(32)
+        );
+
+      }
+    } until (~ f);	
+  } 
+  elseif (op == 4) {
+    ;; Upgrade contract's code
+    var code = cs~load_ref();
+    set_code(code);
+    ifnot(cs.slice_empty?()) {
+      set_c3(code.begin_parse().bless());
+    }
+    throw(0);
+  }
+
+  ;;save current state
+  save_data(stored_seqno, insurer_public_key, price, settlement, reserve, policies);
+}
+
+;; Get methods
+
+int seqno() method_id {
+  return get_data().begin_parse().preload_uint(32);
+}

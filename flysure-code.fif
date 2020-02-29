@@ -1,0 +1,196 @@
+// automatically generated from `stdlib.fc` `flysure-code.fc` 
+PROGRAM{
+  DECLPROC send_money
+  DECLPROC send_message_back
+  DECLPROC save_data
+  DECLPROC load_data
+  DECLPROC recv_internal
+  DECLPROC recv_external
+  85143 DECLMETHOD seqno
+  send_money PROC:<{
+    0 PUSHINT
+    DUP
+    196 PUSHINT
+    NEWC
+    9 STU
+    s1 s5 XCHG
+    8 STI
+    s1 s3 XCHG
+    256 STU
+    SWAP
+    STGRAMS
+    s1 s2 XCHG
+    107 STU
+    32 STU
+    ENDC
+    3 PUSHINT
+    SENDRAWMSG
+  }>
+  send_message_back PROC:<{
+    0 PUSHINT
+    24 PUSHINT
+    NEWC
+    6 STU
+    s0 s5 XCHG2
+    STSLICER
+    ROT
+    STGRAMS
+    s1 s3 XCHG
+    107 STU
+    32 STU
+    ENDC
+    SWAP
+    SENDRAWMSG
+  }>
+  save_data PROC:<{
+    NEWC
+    s1 s6 XCHG
+    32 STU
+    s1 s4 XCHG
+    256 STU
+    ROT
+    STGRAMS
+    SWAP
+    STGRAMS
+    SWAP
+    STGRAMS
+    STDICT
+    ENDC
+    c4 POP
+  }>
+  load_data PROC:<{
+    c4 PUSH
+    CTOS
+    32 LDU
+    256 LDU
+    LDGRAMS
+    LDGRAMS
+    LDGRAMS
+    LDDICT
+    DROP
+  }>
+  recv_internal PROC:<{
+    SWAP
+    CTOS
+    4 LDU
+    SWAP
+    1 PUSHINT
+    AND
+    IFJMP:<{
+      3 BLKDROP
+    }>
+    OVER
+    SEMPTY
+    IFJMP:<{
+      3 BLKDROP
+    }>
+    LDMSGADDR
+    DROP
+    DUP
+    REWRITESTDADDR
+    load_data CALLDICT
+    s10 s3 PUSH2
+    EQUAL
+    IFNOTJMP:<{
+      s8 s10 XCHG
+      10 BLKDROP
+      4294967294 PUSHINT
+      0 PUSHINT
+      64 PUSHINT
+      send_message_back CALLDICT
+    }>
+    s8 POP
+    s0 s8 XCHG
+    32 LDU
+    OVER
+    NOW
+    LEQ
+    DROP
+    32 LDU
+    DROP
+    NEWC
+    s1 s8 XCHG
+    8 STI
+    32 STU
+    s1 s6 XCHG
+    32 STU
+    s0 s4 s6 XCHG3
+    8 PUSHPOW2
+    DICTUSETB
+    s5 s6 XCHG2
+    ADD
+    s4 s5 XCHG
+    s3 s4 XCHG
+    s0 s3 XCHG2
+    save_data CALLDICT
+  }>
+  recv_external PROC:<{
+    9 PUSHPOW2
+    LDSLICEX
+    DUP
+    32 LDU
+    32 LDU
+    load_data CALLDICT
+    s8 s5 XCPU
+    EQUAL
+    33 THROWIFNOT
+    s0 s4 XCHG
+    INC
+    s0 s8 XCHG
+    HASHSU
+    s0 s9 s3 XC2PU
+    CHKSIGNU
+    35 THROWIFNOT
+    ACCEPT
+    s4 PUSH
+    1 EQINT
+    IF:<{
+      s3 POP
+      s3 POP
+      -1 PUSHINT
+      UNTIL:<{
+        s4 PUSH
+        8 PUSHPOW2
+        DICTUGETNEXT
+        NULLSWAPIFNOT
+        NULLSWAPIFNOT
+        s2 POP
+        OVER
+        IF:<{
+        }>
+        SWAP
+        NOT
+      }>
+      DROP
+    }>ELSE<{
+      s0 s4 XCHG
+      4 EQINT
+      IF:<{
+        s0 s2 XCHG
+        LDREF
+        OVER
+        SETCODE
+        SEMPTY
+        IFNOT:<{
+          CTOS
+          BLESS
+          c3 POP
+        }>ELSE<{
+          DROP
+        }>
+        0 THROW
+      }>ELSE<{
+        s2 POP
+      }>
+      s1 s2 XCHG
+    }>
+    s4 s5 XCHG
+    s4 s0 s3 XCHG3
+    save_data CALLDICT
+  }>
+  seqno PROC:<{
+    c4 PUSH
+    CTOS
+    32 PLDU
+  }>
+}END>c
