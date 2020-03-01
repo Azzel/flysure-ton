@@ -2,7 +2,7 @@
 "common-utils.fif" include
 
 {
-  ."<old-data-boc> <message-boc> <grams> <src-addr> [<flyght-date>] [<flyght-code>]" cr
+  ."<old-data-boc> <grams> <src-addr> [<flyght-date>] [<flyght-code>]" cr
   "[<new-data-boc>] [-C <code-fif>]" cr
   ."Simulate sending an internal message to a smart contract."
 } : usage()
@@ -13,12 +13,11 @@
   "-C" "--code-file" 1 { +".fif" include =: Code } option-long()
 
   1 { =: OldDataFile } nth-argument()
-  2 { =: MessageFile } nth-argument()
-  3 { $>GR =: MessageValue } nth-argument()
-  4 { true parse-load-address =: BounceFlag 2=: SrcAddr } nth-argument()
-  5 { parse-int =: FlyghtDate } nth-argument()
-  6 { parse-int =: FlyghtCode } nth-argument()
-  7 { =: NewDataFile } nth-argument()
+  2 { $>GR =: MessageValue } nth-argument()
+  3 { true parse-load-address =: BounceFlag 2=: SrcAddr } nth-argument()
+  4 { parse-int =: FlyghtDate } nth-argument()
+  5 { parse-int =: FlyghtCode } nth-argument()
+  6 { =: NewDataFile } nth-argument()
   no-more-arguments()
 } scan-args()
 

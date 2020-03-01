@@ -15,14 +15,15 @@
   .end_cell(), 3);
 }
 
-() send_message_back(slice addr, ans_tag, grams, mode) impure {
+() send_message_back(slice addr, ans_tag, body, grams, mode) impure {
   ;; int_msg_info$0 ihr_disabled:Bool bounce:Bool bounced:Bool src:MsgAddress -> 011000
   var msg = begin_cell()
     .store_uint(0x18, 6)
     .store_slice(addr)
     .store_grams(grams)
     .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-    .store_uint(ans_tag, 32);
+    .store_uint(ans_tag, 32)
+    .store_uint(body, 32);
 
   send_raw_message(msg.end_cell(), mode);
 }
@@ -37,8 +38,8 @@
       ;; Policies dictionary format:
       ;;    holder addr as id
       ;;    holder addr wc
-      ;;    fly date	
-      ;;    fly code	
+      ;;    fly date
+      ;;    fly code
       .store_dict(policies)
       .end_cell());
 }
@@ -55,6 +56,20 @@
     return (seq_num, insurer_public_key, price, settlement, reserve, policies);
 }
 
+(cell, ()) ~complete_policy(cell policies, int holder_wc, int holder_addr, int amount, slice flight) impure {
+  (_, _) = policies~udict_delete_get?(256, holder_addr);
+  send_raw_message(begin_cell()
+    .store_uint(0xc4, 9)       ;; 0 11000100
+    .store_int(holder_wc, 8)
+    .store_uint(holder_addr, 256)
+    .store_grams(amount)
+    .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+    .store_ref( ;;info about flight
+      begin_cell().store_slice(flight).end_cell()
+    )
+  .end_cell(), 3);
+  return (policies, ());
+}
 
 () recv_internal(int msg_value, cell in_msg_cell, slice in_msg) impure {
   var cs = in_msg_cell.begin_parse();
@@ -72,10 +87,14 @@
   var (stored_seqno, insurer_public_key, price, settlement, reserve, policies) = load_data();
 
   ifnot (msg_value == price) { ;; => attached value is not equal to the insurance price
-    return send_message_back(src_addr_slice, 0xfffffffe, 0, 64);
+    return send_message_back(src_addr_slice, 0xfffffffe, 48, 0, 64);
   }
 
-  ;; todo check nor addr already in policies 
+  ;; check that addr not already in policies
+  (_, int is_found) = policies.udict_get?(256, src_addr);
+  if (is_found) {
+    return send_message_back(src_addr_slice, 0xfffffffe, 49, 0, 64);
+  }
 
   ;;in_msg struct:
   ;;  holder wc
@@ -87,15 +106,15 @@
      ;;return (); ;;temporally mute
   }
   int flight_code = in_msg~load_uint(32); ;;todo remake as ref
-  
+
   ;; Create new policy
   var policy = begin_cell()
             .store_int(src_wc, 8)
             ;; .store_uint(src_addr, 256)
             .store_uint(flight_date, 32)
             .store_uint(flight_code, 32)
-            ; 
- 
+            ;
+
   policies~udict_set_builder(256, src_addr, policy);
   reserve = reserve + msg_value;
 
@@ -121,7 +140,7 @@
   if (op == 1) {
     ;; Update flight's statuses
     ;;load dictionary with flight's statuses from message
-    var fl_status_dict = cs~load_dict();
+    var flights = cs~load_dict();
 
     var holder_addr = -1;
     int f = 0;
@@ -130,13 +149,37 @@
       if (f) {
         var (holder_wc, policy_fl_date, policy_fl_code) = (
           policy~load_uint(8),
-	  policy~load_uint(32),
+	        policy~load_uint(32),
           policy~load_uint(32)
         );
+        var fl_id = -1;
+        int ffl = 0;
+        do {
+          (fl_id, var flight, ffl) = flights.udict_get_next?(32, fl_id);
+          if (ffl) {
+            var (fl_date, fl_code, fl_state) = (
+              flight~load_uint(32),
+              flight~load_uint(32),
+              flight~load_uint(8)
+            );
+            if ((policy_fl_code == fl_code) & (policy_fl_date == fl_date)) {
+              int return_amount = 0;
+              if (~ fl_state & reserve >= settlement) {
+                ;;flight status is delay - return settlement
+                return_amount = settlement;
+                reserve = reserve - settlement;
+              }
+              ;;todo case then reserve is empty
 
+              policies~complete_policy(holder_wc, holder_addr, return_amount, flight);
+              ;;break the circle
+              ffl = 0;
+            }
+          }
+        } until (~ ffl);
       }
-    } until (~ f);	
-  } 
+    } until (~ f);
+  }
   elseif (op == 4) {
     ;; Upgrade contract's code
     var code = cs~load_ref();
@@ -149,6 +192,8 @@
 
   ;;save current state
   save_data(stored_seqno, insurer_public_key, price, settlement, reserve, policies);
+
+  return();
 }
 
 ;; Get methods

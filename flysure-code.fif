@@ -4,6 +4,7 @@ PROGRAM{
   DECLPROC send_message_back
   DECLPROC save_data
   DECLPROC load_data
+  DECLPROC ~complete_policy
   DECLPROC recv_internal
   DECLPROC recv_external
   85143 DECLMETHOD seqno
@@ -31,12 +32,14 @@ PROGRAM{
     24 PUSHINT
     NEWC
     6 STU
-    s0 s5 XCHG2
+    s0 s6 XCHG2
     STSLICER
     ROT
     STGRAMS
-    s1 s3 XCHG
+    s1 s4 XCHG
     107 STU
+    s1 s2 XCHG
+    32 STU
     32 STU
     ENDC
     SWAP
@@ -69,6 +72,33 @@ PROGRAM{
     LDDICT
     DROP
   }>
+  ~complete_policy PROC:<{
+    8 PUSHPOW2
+    s3 s5 s5 PUXC2
+    DICTUDELGET
+    NULLSWAPIFNOT
+    2DROP
+    NEWC
+    s0 s5 XCHG2
+    STSLICER
+    ENDC
+    0 PUSHINT
+    196 PUSHINT
+    NEWC
+    9 STU
+    s1 s5 XCHG
+    8 STI
+    s1 s3 XCHG
+    256 STU
+    SWAP
+    STGRAMS
+    s1 s2 XCHG
+    107 STU
+    STREF
+    ENDC
+    3 PUSHINT
+    SENDRAWMSG
+  }>
   recv_internal PROC:<{
     SWAP
     CTOS
@@ -95,6 +125,21 @@ PROGRAM{
       s8 s10 XCHG
       10 BLKDROP
       4294967294 PUSHINT
+      48 PUSHINT
+      0 PUSHINT
+      64 PUSHINT
+      send_message_back CALLDICT
+    }>
+    s6 s0 PUSH2
+    8 PUSHPOW2
+    DICTUGET
+    NULLSWAPIFNOT
+    NIP
+    IFJMP:<{
+      s8 s10 XCHG
+      10 BLKDROP
+      4294967294 PUSHINT
+      49 PUSHINT
       0 PUSHINT
       64 PUSHINT
       send_message_back CALLDICT
@@ -145,23 +190,83 @@ PROGRAM{
     s4 PUSH
     1 EQINT
     IF:<{
-      s3 POP
-      s3 POP
+      s4 POP
+      s0 s2 XCHG
+      LDDICT
+      DROP
       -1 PUSHINT
       UNTIL:<{
-        s4 PUSH
+        s5 PUSH
         8 PUSHPOW2
         DICTUGETNEXT
         NULLSWAPIFNOT
         NULLSWAPIFNOT
-        s2 POP
-        OVER
+        DUP
         IF:<{
+          s0 s2 XCHG
+          8 LDU
+          32 LDU
+          32 LDU
+          DROP
+          -1 PUSHINT
+          UNTIL:<{
+            s6 PUSH
+            32 PUSHINT
+            DICTUGETNEXT
+            NULLSWAPIFNOT
+            NULLSWAPIFNOT
+            DUP
+            IF:<{
+              s0 s2 XCHG
+              32 LDU
+              32 LDU
+              8 LDU
+              s6 s2 PUXC
+              EQUAL
+              s7 s3 PUXC
+              EQUAL
+              s1 s3 XCHG
+              AND
+              IF:<{
+                s3 POP
+                0 PUSHINT
+                SWAP
+                NOT
+                s10 PUSH
+                AND
+                s15 PUSH
+                GEQ
+                IF:<{
+                  DROP
+                  s13 PUSH
+                  s9 s14 XCPU
+                  SUB
+                  s0 s9 XCHG
+                }>
+                s2 s12 XCHG
+                s5 s(-1) s0 PUXC2
+                s7 s(-1) s13 PUXC2
+                ~complete_policy CALLDICT
+                s0 s10 XCHG
+                0 PUSHINT
+                SWAP
+              }>ELSE<{
+                2DROP
+              }>
+            }>ELSE<{
+              s2 POP
+            }>
+            SWAP
+            NOT
+          }>
+          4 BLKDROP
+        }>ELSE<{
+          s2 POP
         }>
         SWAP
         NOT
       }>
-      DROP
+      2DROP
     }>ELSE<{
       s0 s4 XCHG
       4 EQINT
@@ -182,10 +287,10 @@ PROGRAM{
       }>ELSE<{
         s2 POP
       }>
-      s1 s2 XCHG
     }>
     s4 s5 XCHG
-    s4 s0 s3 XCHG3
+    4 1 REVERSE
+    ROT
     save_data CALLDICT
   }>
   seqno PROC:<{
