@@ -37,6 +37,5 @@ Message <s recv_external Code OldData runvm()
 ."Updated data: " cr NewData <s csr. cr
 
 def? NewDataFile {
-  ."Saving updated data to " NewDataFile +".boc" type cr
   NewData 2 boc+>B NewDataFile +".boc" B>file
 } if

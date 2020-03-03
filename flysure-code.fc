@@ -56,7 +56,7 @@
     return (seq_num, insurer_public_key, price, settlement, reserve, policies);
 }
 
-(cell, ()) ~complete_policy(cell policies, int holder_wc, int holder_addr, int amount, slice flight) impure {
+(cell, ()) ~complete_policy(cell policies, int holder_wc, int holder_addr, int amount, int fl_status) impure {
   (_, _) = policies~udict_delete_get?(256, holder_addr);
   send_raw_message(begin_cell()
     .store_uint(0xc4, 9)       ;; 0 11000100
@@ -64,9 +64,7 @@
     .store_uint(holder_addr, 256)
     .store_grams(amount)
     .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-    .store_ref( ;;info about flight
-      begin_cell().store_slice(flight).end_cell()
-    )
+    .store_uint(fl_status, 8)
   .end_cell(), 3);
   return (policies, ());
 }
@@ -119,7 +117,6 @@
   reserve = reserve + msg_value;
 
   save_data(stored_seqno, insurer_public_key, price, settlement, reserve, policies);
-
 }
 
 () recv_external(slice in_msg) impure {
@@ -132,16 +129,18 @@
   throw_unless(33, msg_seqno == stored_seqno);
   stored_seqno = stored_seqno + 1;
 
-  ;;only insurer can send external message (?)
+  ;;only insurer can send external message
   throw_unless(35, check_signature(slice_hash(in_msg), signature, insurer_public_key));
 
   accept_message();
 
   if (op == 1) {
-    ;; Update flight's statuses
-    ;;load dictionary with flight's statuses from message
-    var flights = cs~load_dict();
-
+    ;; Update flight status
+    var (fl_date, fl_code, fl_state) = (
+      cs~load_uint(32),
+      cs~load_uint(32),
+      cs~load_uint(8)
+    );
     var holder_addr = -1;
     int f = 0;
     do {
@@ -152,31 +151,17 @@
 	        policy~load_uint(32),
           policy~load_uint(32)
         );
-        var fl_id = -1;
-        int ffl = 0;
-        do {
-          (fl_id, var flight, ffl) = flights.udict_get_next?(32, fl_id);
-          if (ffl) {
-            var (fl_date, fl_code, fl_state) = (
-              flight~load_uint(32),
-              flight~load_uint(32),
-              flight~load_uint(8)
-            );
-            if ((policy_fl_code == fl_code) & (policy_fl_date == fl_date)) {
-              int return_amount = 0;
-              if (~ fl_state & reserve >= settlement) {
-                ;;flight status is delay - return settlement
-                return_amount = settlement;
-                reserve = reserve - settlement;
-              }
-              ;;todo case then reserve is empty
-
-              policies~complete_policy(holder_wc, holder_addr, return_amount, flight);
-              ;;break the circle
-              ffl = 0;
-            }
+        if ((policy_fl_code == fl_code) & (policy_fl_date == fl_date)) {
+          int return_amount = 0;
+          if (~ fl_state & reserve >= settlement) {
+            ;;flight status is delay - return settlement
+            return_amount = settlement;
+            reserve = reserve - settlement;
           }
-        } until (~ ffl);
+          ;;todo case then reserve is empty
+
+          policies~complete_policy(holder_wc, holder_addr, return_amount, fl_state);
+        }
       }
     } until (~ f);
   }

@@ -1,0 +1,57 @@
+#!/usr/bin/env fift -s
+"common-utils.fif" include
+
+{
+  ."<contract> <SeqNo> [<fl_date>] [<fl_code>] [<fl_state>]" cr
+  ."Prepare an external message for sending to a smart Contract" cr
+  ."with data for flight date, code and status"
+} : usage()
+
+// == Parsing command-line arguments
+
+{
+  1 { =: BaseFile } nth-argument()
+  2 { parse-int =: SeqNo } nth-argument()
+  3 { parse-int =: FlyghtDate } nth-argument()
+  4 { parse-int =: FlyghtCode } nth-argument()
+  5 { parse-int =: FlyghtStatus } nth-argument()
+  no-more-arguments()
+} scan-args()
+2 < { show-usage() } if // Checks that there's enough arguments
+
+// Default values
+1 =:? FlyghtDate
+2 =:? FlyghtCode
+0 =:? FlyghtStatus
+
+// == End of parsing command-line arguments
+
+BaseFile +"-query" =:? SaveFile
+
+BaseFile +".addr" load-address
+2dup 2constant ContractAddr
+."Contract address = " 2dup .addr cr 6 .Addr cr
+
+BaseFile +".pk" load-keypair
+=: PrivateKey
+=: PublicKey
+
+// Pack the message into a request data structure to be signed
+<b
+  SeqNo 32 u,   // seqno
+  1 32 u,       // op, 1 = create auction
+  FlyghtDate 32 u,
+  FlyghtCode 32 u,
+  FlyghtStatus 8 u,
+b> =: MessageBody
+
+."Signing message: " MessageBody <s csr. cr
+
+ContractAddr null
+  MessageBody PrivateKey sign-message()
+external-message() =: ExtMessage
+
+."New external message: " ExtMessage <s csr. cr
+ExtMessage 2 boc+>B dup Bx. cr
+SaveFile +".boc" tuck B>file
+."(Saved to file " type .")" cr

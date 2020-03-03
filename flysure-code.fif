@@ -78,10 +78,6 @@ PROGRAM{
     DICTUDELGET
     NULLSWAPIFNOT
     2DROP
-    NEWC
-    s0 s5 XCHG2
-    STSLICER
-    ENDC
     0 PUSHINT
     196 PUSHINT
     NEWC
@@ -94,7 +90,8 @@ PROGRAM{
     STGRAMS
     s1 s2 XCHG
     107 STU
-    STREF
+    s1 s2 XCHG
+    8 STU
     ENDC
     3 PUSHINT
     SENDRAWMSG
@@ -192,11 +189,13 @@ PROGRAM{
     IF:<{
       s4 POP
       s0 s2 XCHG
-      LDDICT
+      32 LDU
+      32 LDU
+      8 LDU
       DROP
       -1 PUSHINT
       UNTIL:<{
-        s5 PUSH
+        s7 PUSH
         8 PUSHPOW2
         DICTUGETNEXT
         NULLSWAPIFNOT
@@ -208,65 +207,40 @@ PROGRAM{
           32 LDU
           32 LDU
           DROP
-          -1 PUSHINT
-          UNTIL:<{
-            s6 PUSH
-            32 PUSHINT
-            DICTUGETNEXT
-            NULLSWAPIFNOT
-            NULLSWAPIFNOT
-            DUP
-            IF:<{
-              s0 s2 XCHG
-              32 LDU
-              32 LDU
-              8 LDU
-              s6 s2 PUXC
-              EQUAL
-              s7 s3 PUXC
-              EQUAL
-              s1 s3 XCHG
-              AND
-              IF:<{
-                s3 POP
-                0 PUSHINT
-                SWAP
-                NOT
-                s10 PUSH
-                AND
-                s15 PUSH
-                GEQ
-                IF:<{
-                  DROP
-                  s13 PUSH
-                  s9 s14 XCPU
-                  SUB
-                  s0 s9 XCHG
-                }>
-                s2 s12 XCHG
-                s5 s(-1) s0 PUXC2
-                s7 s(-1) s13 PUXC2
-                ~complete_policy CALLDICT
-                s0 s10 XCHG
-                0 PUSHINT
-                SWAP
-              }>ELSE<{
-                2DROP
-              }>
-            }>ELSE<{
-              s2 POP
-            }>
-            SWAP
+          s6 PUSH
+          EQUAL
+          s1 s7 XCPU
+          EQUAL
+          AND
+          IF:<{
+            0 PUSHINT
+            s4 PUSH
             NOT
+            s8 PUSH
+            AND
+            s13 PUSH
+            GEQ
+            IF:<{
+              DROP
+              s11 PUSH
+              s7 s12 XCPU
+              SUB
+              s0 s7 XCHG
+            }>
+            s2 s10 XCHG
+            s10 s4 s(-1) PU2XC
+            ~complete_policy CALLDICT
+            s0 s8 XCHG
+          }>ELSE<{
+            DROP
           }>
-          4 BLKDROP
         }>ELSE<{
           s2 POP
         }>
         SWAP
         NOT
       }>
-      2DROP
+      4 BLKDROP
     }>ELSE<{
       s0 s4 XCHG
       4 EQINT
