@@ -1,19 +1,4 @@
 ;; insurer contract for flight delay cover
-;; accepts payment for 1 policy for everyone
-;; accepts actual airplane status from owner to save as database
-;; transfer gram on request in case flight was delayed according to database
-
-
-() send_money(int wc, int addr, int amount) impure {
-  send_raw_message(begin_cell()
-    .store_uint(0xc4, 9)
-    .store_int(wc, 8)
-    .store_uint(addr, 256)
-    .store_grams(amount)
-    .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-    .store_uint(0, 32) ;; Simple money transfer
-  .end_cell(), 3);
-}
 
 () send_message_back(slice addr, ans_tag, body, grams, mode) impure {
   ;; int_msg_info$0 ihr_disabled:Bool bounce:Bool bounced:Bool src:MsgAddress -> 011000
@@ -101,7 +86,8 @@
 
   int flight_date = in_msg~load_uint(32);
   if (flight_date <= now()) { ;;not accept old flights
-     ;;return (); ;;temporally mute
+    ;;omit for fast testing
+    ;;return ();
   }
   int flight_code = in_msg~load_uint(32); ;;todo remake as ref
 
@@ -154,26 +140,35 @@
         if ((policy_fl_code == fl_code) & (policy_fl_date == fl_date)) {
           int return_amount = 0;
           if (~ fl_state & reserve >= settlement) {
-            ;;flight status is delay - return settlement
+            ;;flight status is delay and reserve is enough - then return settlement
             return_amount = settlement;
             reserve = reserve - settlement;
+
+            (_, _) = policies~udict_delete_get?(256, holder_addr);
+
+            send_raw_message(begin_cell()
+              .store_uint(0xc4, 9)       ;; 0 11000100
+              .store_int(holder_wc, 8)
+              .store_uint(holder_addr, 256)
+              .store_grams(settlement)
+              .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+              .store_uint(fl_state, 8)
+            .end_cell(), 3);
           }
           ;;todo case then reserve is empty
-
-          policies~complete_policy(holder_wc, holder_addr, return_amount, fl_state);
         }
       }
     } until (~ f);
   }
-  elseif (op == 4) {
-    ;; Upgrade contract's code
-    var code = cs~load_ref();
-    set_code(code);
-    ifnot(cs.slice_empty?()) {
-      set_c3(code.begin_parse().bless());
-    }
-    throw(0);
-  }
+  ;;elseif (op == 4) {
+  ;;  ;; Upgrade contract's code
+  ;;  var code = cs~load_ref();
+  ;;  set_code(code);
+  ;;  ifnot(cs.slice_empty?()) {
+  ;;    set_c3(code.begin_parse().bless());
+  ;;  }
+  ;;  throw(0);
+  ;;}
 
   ;;save current state
   save_data(stored_seqno, insurer_public_key, price, settlement, reserve, policies);

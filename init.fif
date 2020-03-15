@@ -4,7 +4,6 @@
 { ."<workchain-id> [<price>] [<settlement>] [<filename-base>] [-C <code-fif>]" cr
   ."Creates a new flysure contract with <price> amount of policy premium and <settlement> amount for claim payment, with private keys saved to or loaded from <filename-base>.pk" cr
   ."('new-flysure.pk' by default)." cr
-  ."some additional info."
 } : usage()
 
 // == Parsing command-line arguments
